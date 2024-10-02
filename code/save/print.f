@@ -68,7 +68,7 @@ c
       write(lu,5200) (iz,txym(iz,8),txym(iz,9),txym(iz,10),txym(iz,11),txym(iz,12),iz=iz_strt,iz_end)
  5200 format(//,' IZ',5x,' SCALAR-7 MEAN',8x,'8-MEAN',10x,
      +          '9-MEAN',10x, '10-MEAN', 10x, '11-MEAN', 10x
-     +       ,/,(1x,i4,5sa(3x,e13.6)))
+     +       ,/,(1x,i4,5(3x,e13.6)))
 
 
       return

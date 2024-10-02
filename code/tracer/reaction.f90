@@ -52,7 +52,7 @@ contains
     ! c(5) = Hydrogen Ion, [H+], t(ix,iy,7,iz)
     ! c(6) = Hydroxide, [OH-], t(ix,iy,8,iz)
     
-    co2=t(ix, iy, 2:nscl, iz)
+    co2(0:nscl-2)=t(ix, iy, 2:nscl, iz)
     
 
     if(chem0d == 1) then
@@ -421,7 +421,7 @@ contains
        ! calculate derivative, use y array for temporary storage
        y_j = dydt(t_rkc + (h * c_jm1), y_jm1, temper, iz)
 
-       do i = 0,nscl-2 !this may cause the issue
+       do i = 0,nscl-2 
           y_j(i) = (1.0 - mu - nu) * y_0(i) + (mu * y_jm1(i)) + (nu * y_jm2(i)) &
                + h * mu_t * (y_j(i) - (gamma_t * F_0(i)))
        enddo
@@ -454,9 +454,9 @@ contains
   end function rkc_step
 
   function dydt(t_rkc, y, temper, iz)
-   ! NPZ from P Franks 1986 recommended by Nikki Lovenduski
+   ! NPZ from Peter Franks 1986 recommended by Nikki Lovenduski
    ! Parameters
-    real :: vp
+    real :: vp != 2.0/24.0/60.0/60.0        ! 1/s
     real :: kn = 1.0        ! umolN/l
     real :: rm = 1.0/24.0/60.0/60.0        ! 1/s
     real :: death_rate_zoo = 0.2/24.0/60.0/60.0    ! 1/s
@@ -468,7 +468,7 @@ contains
     real :: r_npzd = 0.15/24.0/60.0/60.0  ! 1/s 
     real :: intensity
     real :: irradiance0 =1.0
-    real :: k_ext, a_npz, b_npz, c_npz
+    real :: k_ext !, a_npz, b_npz, c_npz
     real :: function_light
     real, intent(in),  dimension(0:nscl-2) :: y
     real, dimension(0:nscl-2) :: dydt, dy
@@ -481,6 +481,9 @@ contains
     real b1, b2, b3, b4, b5, b6, b7
     integer :: iz
     real :: dz
+    real :: a_npz=0.6/24.0/60.0/60.0 !1/s
+    real :: b_npz=1.066
+    real :: c_npz=1.0 !1/C
     
     reduced = .true.
     salt   = 35.0
@@ -525,9 +528,9 @@ contains
       intensity = rm
     endif
     !irradiance0=0.5*COS(2*4.0*ATAN(1.0)*(time/24.0/60.0/60.0)) + 0.5 + 0.5*10**(-6)
-    !function_light=irradiance0*exp(-k_ext*ABS(dz)*(iz-1)) !from P Franks and C Chen 2001
+    !function_light=irradiance0*exp(-k_ext*ABS(dz)*(iz-1)) !from eter Franks and C Chen 2001
     function_light=irradiance0
-    vp=(a_npz*b_npz**(c_npz*15.0))/24.0/60.0/60.0 !from Eppley 1972 (1/s)
+    vp = (a_npz*b_npz**(c_npz*15.0)) !from Eppley 1972 (1/s)
     
     !dy(0) = b1*c(1)*c(5)+b2*c(1)-a1*c(0)-a2*c(0)*c(6)
     dy(0)=0
