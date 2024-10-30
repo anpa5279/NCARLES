@@ -18,8 +18,6 @@ module reaction
   ! rpartner     : An array dictating what tracers are coupled to each other
   ! tau          : The timescale to be used.
 
-  ! flg_debug    : Write a debug file
-  integer, parameter :: flg_debug = 0
 
 contains
 
@@ -486,7 +484,7 @@ contains
     real :: c_npz=1.0 !1/C
     
     reduced = .true.
-    salt   = 35.0
+    salt   = 35.0 !psu
     do i = 0,nscl-2
        c(i) = y(i)
     enddo

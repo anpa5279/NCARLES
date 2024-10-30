@@ -32,7 +32,7 @@ SUBROUTINE comp1(istep,it)
       ENDDO
     ENDDO
   ENDDO
-
+  !updates scalar matrix
   DO iz=izs,ize
     DO l=1,nscl
       DO iy=iys,iye
@@ -47,9 +47,9 @@ SUBROUTINE comp1(istep,it)
   CALL tke_vis(istep)
   CALL rhs_uvw(istep)
 
-  ! EVALUATE RHS OF SCALAR EQUATIONS=
+  ! EVALUATE RHS OF SCALAR EQUATIONS= (updates sclar advection)
   DO l=1,nscl
-    CALL rhs_scl(istep,l,it)
+    CALL rhs_scl(istep,l)
   ENDDO
 
   ! GATHER STAT SUMS ON ROOT PROCESSOR USING MPI_REDUCTION OVER ALL PROCESSORS

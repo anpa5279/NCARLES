@@ -14,7 +14,7 @@ SUBROUTINE xderivp(ax,trigx,xk,nnx,iys,iye)
     ax(1,iy) = 0.0
     ax(nnx,iy) = 0.0
     DO ix=2,nnx-1,2
-      ii          = ii + 1
+      ii          = ii + 1 !why is this even needed
       temp        = ax(ix,iy)
       ax(ix,iy)   = -xk(ii)*ax(ix+1,iy)
       ax(ix+1,iy) = xk(ii)*temp

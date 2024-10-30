@@ -19,7 +19,7 @@ SUBROUTINE strang1(it)
   DO iz=izs,ize
     DO iy=iys,iye
       DO ix=1,nnx
-      tmp = react_src(ix,iy,1,iz)
+      tmp = react_src(ix,iy,1,iz) !why even bother indexing for the first scalar when it is not even used in react_src?
         DO l=2,nscl
           trhs(ix,iy,l,iz) = tmp(l-1)
           IF(trhs(ix,iy,l,iz).le.1.0e-20)THEN
@@ -42,23 +42,23 @@ SUBROUTINE strang1(it)
   ENDDO
 
   !taking averages
-  Pavg=0.0
-  Zavg=0.0
-  Navg=0.0
+  !Pavg=0.0
+  !Zavg=0.0
+  !Navg=0.0
 
-  DO iz=izs,ize
-    DO ix=1,nnx
-      DO iy=iys,iye
-        Pavg= Pavg+ t(ix,iy,6,iz)/(nnx**2)
-        Zavg= Zavg+ t(ix,iy,7,iz)/(nnx**2)
-        Navg= Navg+ t(ix,iy,8,iz)/(nnx**2)
-        
-      ENDDO
-    ENDDO
-    CALL NPZdebug(Pavg, Zavg, Navg, iz, 'end of strang1')
-    Pavg=0.0
-    Zavg=0.0
-    Navg=0.0
-  ENDDO
+  !DO iz=izs,ize
+  !  DO ix=1,nnx
+  !    DO iy=iys,iye
+  !      Pavg= Pavg+ t(ix,iy,6,iz)/(nnx**2)
+  !      Zavg= Zavg+ t(ix,iy,7,iz)/(nnx**2)
+  !      Navg= Navg+ t(ix,iy,8,iz)/(nnx**2)
+  !      
+  !    ENDDO
+  !  ENDDO
+  !  CALL NPZdebug(Pavg, Zavg, Navg, iz, 'end of strang1')
+  !  Pavg=0.0
+  !  Zavg=0.0
+  !  Navg=0.0
+  !ENDDO
   RETURN
 END SUBROUTINE
