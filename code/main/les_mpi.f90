@@ -67,82 +67,82 @@ PROGRAM les_mpi
     ENDIF
 
     ! 3 STAGE RUNGE-KUTTA TIME STEPPING
-    DO 8999 istage=1,3
-    dtzeta = dt*zetas(istage)
-    dtgama = dt*gama(istage)
+    DO istage=1,3
+      dtzeta = dt*zetas(istage)
+      dtgama = dt*gama(istage)
 
-    ! COMPUTE DERIVATIVES OF (U,V,W)
-    CALL exchange
-    CALL get_derv
+      ! COMPUTE DERIVATIVES OF (U,V,W)
+      CALL exchange
+      CALL get_derv
 
-    ! NEW EDDY VISCOSITY, AND BCS
-    IF(iss == 0 .AND. ifree == 0) THEN
-      CALL lower(it)
-    ELSEIF(ifree == 1) THEN
-      CALL lower_free(it)
-    ENDIF
-
-    IF(ise == numprocs-1) THEN
-      CALL upper
-    ENDIF
-
-    CALL applytracerbc(it)
-    CALL bcast_pbc
-    CALL get_means(istage)
-
-    IF(ivis == 1) THEN
-      CALL iso(it)
-      CALL surfvis(it)
-    ENDIF
-
-    IF(istage == 1)THEN
-      CALL xy_stats
-      CALL tke_budget
-      CALL pbltop(itop)
-    ENDIF
-
-    ! GET RHS FOR ALL EQUATIONS
-    IF(istage==1 .AND. flg_reaction==1)THEN
-      CALL strang1(it)
-    ENDIF
-
-    CALL comp1(istage,it)
-
-    ! SOLVE FOR PRESSURE
-    CALL comp_p
-
-    ! ADD PRESSURE GRADIENT AND DEALIAS
-    CALL comp2
-
-    IF(istage==3 .AND. flg_reaction==1)THEN
-      CALL strang1(it)
-    ENDIF
-
-    IF(msave .AND. istage == 3) THEN
-      CALL save_v(it)
-    ENDIF
-
-    IF(istage == 3) THEN
-      IF(msave .AND. l_root) CALL save_c(it)
-    ENDIF
-
-    IF(micut) THEN
-      CALL dealias
-    ENDIF
-
-    IF(mnout .AND. istage == 1)  THEN
-      IF(l_debug) THEN
-        CALL print(nprt,it,izs,ize)
+      ! NEW EDDY VISCOSITY, AND BCS
+      IF(iss == 0 .AND. ifree == 0) THEN
+        CALL lower(it)
+      ELSEIF(ifree == 1) THEN
+        CALL lower_free(it)
       ENDIF
-      IF(l_root) CALL print(6,it,1,nnz)
-    ENDIF
 
-    IF(l_root) THEN
-      IF(mhis  .AND. istage == 1)  CALL write_his(itop)
-      IF(mhis  .AND. istage == 1 .AND. mtape) CALL close_his
-    ENDIF
+      IF(ise == numprocs-1) THEN
+        CALL upper
+      ENDIF
 
-    8999 CONTINUE
+      CALL applytracerbc(it)
+      CALL bcast_pbc
+      CALL get_means(istage)
+
+      IF(ivis == 1) THEN
+        CALL iso(it)
+        CALL surfvis(it)
+      ENDIF
+
+      IF(istage == 1)THEN
+        CALL xy_stats
+        CALL tke_budget
+        CALL pbltop(itop)
+      ENDIF
+
+      ! GET RHS FOR ALL EQUATIONS
+      IF(istage==1 .AND. flg_reaction==1)THEN
+        CALL strang1(it) !updates sources and sinks
+      ENDIF
+
+      CALL comp1(istage,it)
+
+      ! SOLVE FOR PRESSURE
+      CALL comp_p
+
+      ! ADD PRESSURE GRADIENT AND DEALIAS
+      CALL comp2
+
+      IF(istage==3 .AND. flg_reaction==1)THEN
+        CALL strang1(it) !updates sources and sinks
+      ENDIF
+
+      IF(msave .AND. istage == 3) THEN
+        CALL save_v(it)
+      ENDIF
+
+      IF(istage == 3) THEN
+        IF(msave .AND. l_root) CALL save_c(it)
+      ENDIF
+
+      IF(micut) THEN 
+        CALL dealias!this is never called because itcut is not defined anywhere to make micut true 
+      ENDIF
+
+      IF(mnout .AND. istage == 1)  THEN
+        IF(l_debug) THEN
+          CALL print(nprt,it,izs,ize)
+        ENDIF
+        IF(l_root) CALL print(6,it,1,nnz)
+      ENDIF
+
+      IF(l_root) THEN
+        IF(mhis  .AND. istage == 1)  CALL write_his(itop)
+        IF(mhis  .AND. istage == 1 .AND. mtape) CALL close_his
+      ENDIF
+
+    END DO !end of RK3 loop
     CALL get_max
     CALL get_dt(it,iti)
   END DO !end of while loop

@@ -121,7 +121,7 @@ module tracerbc
 
         do iscl = 2,nscl
           bnds=bnd(:,iscl); vals=val(iscl); points=point(:,iscl);
-          if (it.eq.1) then
+          if (it.eq.1) then !not sure why this if statement is here. it would be more efficient if this would in les_mpi line 89. 
               if (ictype(iscl).eq.1) call hbndsource(iscl,bnds,vals);
               if (ictype(iscl).eq.4) call pointsource(iscl, bnds, vals);
               if (ictype(iscl).eq.5) call vgradsource(iscl,bnds,vals);
