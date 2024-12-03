@@ -1,4 +1,4 @@
-module reaction
+module cc
   use fields, only: t
   use inputs
   use con_data, only: time,dt, dz
@@ -18,106 +18,62 @@ module reaction
   ! rpartner     : An array dictating what tracers are coupled to each other
   ! tau          : The timescale to be used.
 
-  ! flg_debug    : Write a debug file
-  integer, parameter :: flg_debug = 0
 
 contains
 
   ! REACT_SRC: calculate the scalar reaction source term for a given scalar
   !            and point. This is called in rhs_scl for each scalar.
-  function react_src(ix,iy,iscl, iz)
-    ! ix, iy, iscl, iz (in): location of interest
-    real, dimension(nscl-1) :: react_src
-    integer, intent(in) :: ix, iy, iscl, iz
+function react_src(ix, iy, iscl, iz)
+   ! ix, iy, iscl, iz (in): location of interest
+   real, dimension(nscl-1) :: react_src
+   integer, intent(in) :: ix, iy, iscl, iz
 
-    integer :: zzi, i
-    real, dimension(0:nscl-2) :: co2, co2tmp
-    real :: dtst, temper, K1star, K2star, Kwater, Kboron, Rgas, salt
-    real :: h, t_rkc, t_next, t_end, task, k_ext
-    integer :: steps
+   real, dimension(0:nscl-2) :: co2, co2tmp
+   real :: temper, t_rkc, t_end
+   real, dimension(0:4+nscl-1) :: workLocal
+   integer :: i
 
-    !!!!!!!!!!!!!
-    !! Zeebe et al. 2001 Carbonate Chemistry
-    !!!!!!!!!!!!!
+   t_rkc  = time
+   t_end  = time + dt * 0.5
 
-    t_rkc  = time
-    t_end  = time + dt*0.5
-    task   = 1
+   !!!!!!!!!!!!
+   !! Zeebe et al. 2001 Carbonate Chemistry
+   !!!!!!!!!!!!!
+   ! c(0) = Carbon Dioxide, [CO2], t(ix,iy,2,iz)
+   ! c(1) = Bicarbonate, [HCO3-], t(ix,iy,3,iz)
+   ! c(2) = Carbonate, [CO32-], t(ix,iy,4,iz)
+   ! c(3) = Boric Acid, [B(OH)3], t(ix,iy,5,iz)
+   ! c(4) = Tetrahydroxyborate, [B(OH)4-], t(ix,iy,6,iz)
+   ! c(5) = Hydrogen Ion, [H+], t(ix,iy,7,iz)
+   ! c(6) = Hydroxide, [OH-], t(ix,iy,8,iz)
 
-    ! c(0) = Carbon Dioxide, [CO2], t(ix,iy,2,iz)
-    ! c(1) = Bicarbonate, [HCO3-], t(ix,iy,3,iz)
-    ! c(2) = Carbonate, [CO32-], t(ix,iy,4,iz)
-    ! c(3) = Boric Acid, [B(OH)3], t(ix,iy,5,iz)
-    ! c(4) = Tetrahydroxyborate, [B(OH)4-], t(ix,iy,6,iz)
-    ! c(5) = Hydrogen Ion, [H+], t(ix,iy,7,iz)
-    ! c(6) = Hydroxide, [OH-], t(ix,iy,8,iz)
-    
-    co2(0:nscl-2)=t(ix, iy, 2:nscl, iz)
-    
+   workLocal(:) = 0.0
+   co2(0:nscl-2) = t(ix, iy, 2:nscl, iz)
 
-    if(chem0d == 1) then
+   if (chem0d == 1) then
       temper = iTsurf
-    else
-      temper = t(ix,iy,1,iz)
-    end if
+   else
+      temper = t(ix, iy, 1, iz)
+   end if
 
-    co2tmp = intDriver(t_rkc, t_end, co2, temper, iz)
-   
-    co2=co2tmp
+   co2tmp = rkc_driver(t_rkc, t_end, workLocal, co2, temper, iz)
+   co2 = co2tmp
 
-    do i = 0,nscl-2
-       react_src(i+1) = co2(i)
-    enddo
+   do i = 0, nscl-2
+      react_src(i+1) = co2(i)
+   end do
 
-  end function react_src
+end function react_src
 
-  function intDriver(t_rkc, t_end, yGlobal, temper,iz)
-    real, intent(in) :: t_rkc
-    real, intent(in) :: t_end, temper
-    real, intent(in), dimension(0:nscl-2) :: yGlobal
-    real, dimension(0:nscl-2) :: intDriver
-    real, dimension(0:nscl-2) :: yLocal, yLocal2
-    real, dimension(0:4+nscl-1) :: workLocal
-    integer i
-    integer, intent(in) :: iz
-
-    workLocal(:) = 0.0
-
-    do i = 0,nscl-2
-       yLocal(i)    = yGlobal(i)
-    enddo
-
-    yLocal2 = rkc_driver(t_rkc, t_end, workLocal, yLocal, temper, iz)
-
-
-    do i = 0,nscl-2
-       yLocal(i)      = yLocal2(i)
-       intDriver(i)   = yLocal2(i)
-    enddo
-
-  end function intDriver
-
-  function rkc_driver(t_rkc2, t_end, work, yLocal, temper, iz)
+  function rkc_driver(t_rkc, t_end, workLocal, co2, temper, iz)
     ! Driver function for RKC integrator.
     !
-    ! t_tkc    the starting time.
-    ! t_end    the desired end time.
-    ! task     0 to take a single integration step, 1 to integrate to tEnd.
-    ! work     Real work array, size 3.
-    ! yLocal   Dependent variable array, integrated values replace initial conditions.
+    ! t_tkc       the starting time.
+    ! t_end       the desired end time.
+    ! task        0 to take a single integration step, 1 to integrate to tEnd.
+    ! workLocal   Real work array, size 3.
+    ! co2         Dependent variable array, integrated values replace initial conditions.
 
-    real, intent(in) :: t_rkc2
-    real, intent(in) :: t_end, temper
-    real, intent(inout), dimension(0:nscl-2) :: yLocal
-    real, dimension(0:nscl-2) :: rkc_driver
-    real, intent(inout), dimension(0:4+nscl-1) :: work
-    real, dimension(0:nscl-2) :: y_n, F_n, temp_arr, temp_arr2
-    integer nstep, m_max, i, m
-    real abs_tol, rel_tol, UROUND, hmax, hmin, err, est
-    real fac, temp1, temp2, t_rkc
-    integer, intent(in) :: iz
-
-    t_rkc = t_rkc2
     nstep   = 0
     rel_tol = 1.0e-6
     abs_tol = 1.0e-10
@@ -131,7 +87,7 @@ contains
     endif
 
     do i = 0,nscl-2
-       y_n(i) = yLocal(i)
+       y_n(i) = co2(i)
     enddo
     
 
@@ -139,80 +95,80 @@ contains
     F_n = dydt(t_rkc, y_n, temper, iz)
    
     ! load initial estimate for eigenvector
-    if(work(2) < UROUND) then
+    if(workLocal(2) < UROUND) then
        do i = 0,nscl-2
-          work(4+i) = F_n(i)
+          workLocal(4+i) = F_n(i)
        enddo
     endif
 
     do while (t_rkc < t_end)
-       ! use time step stored in work(3)
+       ! use time step stored in workLocal(3)
 
        ! estimate Jacobian spectral radius
        ! only if 25 steps passed
-       ! spec_rad = work(4)
+       ! spec_rad = workLocal(4)
        temp_arr(:)  = 0.0
        temp_arr2(:) = 0.0
        err          = 0.0
 
        if(mod(nstep,25) == 0)then
-          work(3) = rkc_spec_rad(t_rkc, hmax, y_n, F_n, work(4), temp_arr2, temper, iz)
+          workLocal(3) = rkc_spec_rad(t_rkc, hmax, y_n, F_n, workLocal(4), temp_arr2, temper, iz)
        endif
 
        ! first step, estimate step size
-       if(work(2) < UROUND)then
-          work(2) = hmax
-          if((work(3) * work(2)) > 1.0)then
-             work(2) = 1.0/work(3)
+       if(workLocal(2) < UROUND)then
+          workLocal(2) = hmax
+          if((workLocal(3) * workLocal(2)) > 1.0)then
+             workLocal(2) = 1.0/workLocal(3)
           endif
-          work(2) = max(work(2), hmin)
+          workLocal(2) = max(workLocal(2), hmin)
 
           do i = 0,nscl-2
-             temp_arr(i) = y_n(i) + (work(2) * F_n(i))
+             temp_arr(i) = y_n(i) + (workLocal(2) * F_n(i))
           enddo
           
-          temp_arr2 = dydt(t_rkc + work(2), temp_arr, temper, iz)
+          temp_arr2 = dydt(t_rkc + workLocal(2), temp_arr, temper, iz)
           err = 0.0
           do i = 0,nscl-2
              est = (temp_arr2(i) - F_n(i)) / (abs_tol + rel_tol * abs(y_n(i)))
              err = err + est*est
           enddo
-          err = work(2) * sqrt(err/real(nscl-2))
+          err = workLocal(2) * sqrt(err/real(nscl-2))
 
-          if((0.1 * work(2)) < (hmax * sqrt(err)))then
-             work(2) = max((0.1 * work(2)) / sqrt(err), hmin)
+          if((0.1 * workLocal(2)) < (hmax * sqrt(err)))then
+             workLocal(2) = max((0.1 * workLocal(2)) / sqrt(err), hmin)
           else
-             work(2) = hmax
+             workLocal(2) = hmax
           endif
        endif
 
        ! check if last step
-       if((1.1 * work(2)) .ge. abs(t_end - t_rkc))then
-          work(2) = abs(t_end - t_rkc)
+       if((1.1 * workLocal(2)) .ge. abs(t_end - t_rkc))then
+          workLocal(2) = abs(t_end - t_rkc)
        endif
 
        ! calculate number of steps
-       m = 1 + nint(sqrt(1.54 * work(2) * work(3) + 1.0))
+       m = 1 + nint(sqrt(1.54 * workLocal(2) * workLocal(3) + 1.0))
 
        if(m > m_max)then
           m = m_max
-          work(2) = real((m*m - 1) / (1.54*work(3)))
+          workLocal(2) = real((m*m - 1) / (1.54*workLocal(3)))
        endif
 
-       hmin = 10.0 * UROUND * max(abs(t_rkc), abs(t_rkc + work(2)))
+       hmin = 10.0 * UROUND * max(abs(t_rkc), abs(t_rkc + workLocal(2)))
 
        ! perform tentative time step
-       yLocal = rkc_step(t_rkc, work(2), y_n, F_n, m, temper, iz)
+       co2 = rkc_step(t_rkc, workLocal(2), y_n, F_n, m, temper, iz)
        
        ! calculate F_np1 with tenative y_np1
-       temp_arr = dydt(t_rkc + work(2), yLocal, temper, iz)
+       temp_arr = dydt(t_rkc + workLocal(2), co2, temper, iz)
        
        ! estimate error
        err = 0.0
        do i = 0,nscl-2
           est = 0.0
-          est = 0.8 * (y_n(i) - yLocal(i)) + 0.4 * work(2) * (F_n(i) + temp_arr(i))
-          est = est / (abs_tol + rel_tol * max(abs(yLocal(i)), abs(y_n(i))))
+          est = 0.8 * (y_n(i) - co2(i)) + 0.4 * workLocal(2) * (F_n(i) + temp_arr(i))
+          est = est / (abs_tol + rel_tol * max(abs(co2(i)), abs(y_n(i))))
           err = err + est*est
        enddo
        err = sqrt(err / 7.0)
@@ -221,60 +177,59 @@ contains
           ! error too large, step is rejected
 
           ! select smaller step size
-          work(2) = 0.8 * work(2) / (err**(1.0/3.0))
+          workLocal(2) = 0.8 * workLocal(2) / (err**(1.0/3.0))
 
           ! reevaluate spectral radius
-          work(3) = rkc_spec_rad(t_rkc, hmax, y_n, F_n, work(4), temp_arr2, temper, iz)
-          !CALL NPZdebug(y_n(4), y_n(5), y_n(6), iz, 'a rkc_spec_rad2 in rkc_driver')
+          workLocal(3) = rkc_spec_rad(t_rkc, hmax, y_n, F_n, workLocal(4), temp_arr2, temper, iz)
        else
           ! step accepted
-          t_rkc = t_rkc + work(2)
+          t_rkc = t_rkc + workLocal(2)
           nstep = nstep + 1
 
           fac   = 10.0
           temp1 = 0.0
           temp2 = 0.0
-          if(work(1) < UROUND)then
+          if(workLocal(1) < UROUND)then
              temp2 = err**(1.0/3.0)
              if(0.8 < (fac * temp2))then
                 fac = 0.8 /  temp2
              endif
           else
-             temp1 = 0.8 * work(2) * (work(0)**(1.0/3.0))
-             temp2 = work(1) * (err**(2.0/3.0))
+             temp1 = 0.8 * workLocal(2) * (workLocal(0)**(1.0/3.0))
+             temp2 = workLocal(1) * (err**(2.0/3.0))
              if(temp1 < (fac * temp2))then
                 fac = temp1 / temp2
              endif
           endif
 
           ! set "old" values to those for current time step
-          work(0) = err
-          work(1) = work(2)
+          workLocal(0) = err
+          workLocal(1) = workLocal(2)
 
           do i = 0,nscl-2
-             y_n(i) = yLocal(i)
+             y_n(i) = co2(i)
              F_n(i) = temp_arr(i)
           enddo
 
           ! store next time step
-          work(2) = work(2) * max(0.1, fac)
-          work(2) = max(hmin, min(hmax, work(2)))
+          workLocal(2) = workLocal(2) * max(0.1, fac)
+          workLocal(2) = max(hmin, min(hmax, workLocal(2)))
 
        endif
     enddo
 
     do i = 0,nscl-2
-       rkc_driver(i) = yLocal(i)
+       rkc_driver(i) = co2(i)
     enddo
 
   end function rkc_driver
 
-  real function rkc_spec_rad(t_rkc, hmax, yLocal, F, v, Fv, temper, iz)
+  real function rkc_spec_rad(t_rkc, hmax, co2, F, v, Fv, temper, iz)
     ! Function to estimate spectral radius.
     !
     ! t_rkc    the time.
     ! hmax     Max time step size.
-    ! yLocal   Array of dependent variable.
+    ! co2   Array of dependent variable.
     ! F        Derivative evaluated at current state
     ! v
     ! Fv
@@ -282,7 +237,7 @@ contains
     real, intent(in) :: t_rkc
     real, intent(in) :: hmax, temper
     real, intent(inout), dimension(0:nscl-2) :: v, Fv, F
-    real, intent(in), dimension(0:nscl-2) :: yLocal
+    real, intent(in), dimension(0:nscl-2) :: co2
     integer itmax, i, iter, ind
     real UROUND, small, nrm1, nrm2, dynrm, sigma
     integer, intent(in) :: iz
@@ -295,7 +250,7 @@ contains
     sigma   = 0.0
 
     do i = 0,nscl-2
-       nrm1 = nrm1 + yLocal(i) * yLocal(i)
+       nrm1 = nrm1 + co2(i) * co2(i)
        nrm2 = nrm2 + v(i) * v(i)
     enddo
     nrm1 = sqrt(nrm1)
@@ -304,12 +259,12 @@ contains
     if((nrm1 .ne. 0.0) .and. (nrm2 .ne. 0.0))then
        dynrm = nrm1 * sqrt(UROUND)
        do i = 0,nscl-2
-          v(i) = yLocal(i) + v(i) * (dynrm / nrm2)
+          v(i) = co2(i) + v(i) * (dynrm / nrm2)
        enddo
     elseif(nrm1 .ne. 0.0)then
        dynrm = nrm1 * sqrt(UROUND)
        do i = 0,nscl-2
-          v(i) = yLocal(i) * (1.0 + sqrt(UROUND))
+          v(i) = co2(i) * (1.0 + sqrt(UROUND))
        enddo
     elseif(nrm2 .ne. 0.0)then
        dynrm = UROUND
@@ -337,18 +292,18 @@ contains
        sigma = nrm1 / dynrm
        if((iter .ge. 2) .and. (abs(sigma - nrm2) .le. (max(sigma, small) * 0.01)))then
           do i = 0,nscl-2
-             v(i) = v(i) - yLocal(i)
+             v(i) = v(i) - co2(i)
           enddo
           rkc_spec_rad = 1.2 * sigma
        endif
 
        if(nrm1 .ne. 0.0)then
           do i = 0,nscl-2
-             v(i) = yLocal(i) + ((Fv(i) - F(i)) * (dynrm / nrm1))
+             v(i) = co2(i) + ((Fv(i) - F(i)) * (dynrm / nrm1))
           enddo
        else
           ind = mod(iter, int(nscl-1))
-          v(ind) = yLocal(ind) - (v(ind) - yLocal(ind))
+          v(ind) = co2(ind) - (v(ind) - co2(ind))
        endif
        !CALL NPZdebug(v(4), v(5), v(6), iz, 'end of rkc_spec_rad')
        
@@ -454,22 +409,7 @@ contains
   end function rkc_step
 
   function dydt(t_rkc, y, temper, iz)
-   ! NPZ from Peter Franks 1986 recommended by Nikki Lovenduski
    ! Parameters
-    real :: vp != 2.0/24.0/60.0/60.0        ! 1/s
-    real :: kn = 1.0        ! umolN/l
-    real :: rm = 1.0/24.0/60.0/60.0        ! 1/s
-    real :: death_rate_zoo = 0.2/24.0/60.0/60.0    ! 1/s
-    real :: lambda = 0.2    ! umolN/l
-    real :: death_rate_phyto = 0.1/24.0/60.0/60.0  ! 1/s
-    real :: alpha = 0.3
-    real :: beta = 0.6
-    real :: phi = 0.4/24.0/60.0/60.0 ! 1/s
-    real :: r_npzd = 0.15/24.0/60.0/60.0  ! 1/s 
-    real :: intensity
-    real :: irradiance0 =1.0
-    real :: k_ext !, a_npz, b_npz, c_npz
-    real :: function_light
     real, intent(in),  dimension(0:nscl-2) :: y
     real, dimension(0:nscl-2) :: dydt, dy
     real, dimension(0:nscl-2) :: c
@@ -479,11 +419,6 @@ contains
     logical reduced
     real a1, a2, a3, a4, a5, a6, a7
     real b1, b2, b3, b4, b5, b6, b7
-    integer :: iz
-    real :: dz
-    real :: a_npz=0.6/24.0/60.0/60.0 !1/s
-    real :: b_npz=1.066
-    real :: c_npz=1.0 !1/C
     
     reduced = .true.
     salt   = 35.0
@@ -521,52 +456,25 @@ contains
     b5 = (a5/Kw)/(1.0e6)
     b6 = (a6*Kw/Kb)*(1.0e6)
     b7 = a7*K2s/Kb
-
-    if(flg_npz==0)then !Mayzaud-Poulet
-      intensity = rm * c(7) * lambda !Mayzaud-Poulet
-    else !Ivlev
-      intensity = rm
-    endif
-    !irradiance0=0.5*COS(2*4.0*ATAN(1.0)*(time/24.0/60.0/60.0)) + 0.5 + 0.5*10**(-6)
-    !function_light=irradiance0*exp(-k_ext*ABS(dz)*(iz-1)) !from eter Franks and C Chen 2001
-    function_light=irradiance0
-    vp = (a_npz*b_npz**(c_npz*15.0)) !from Eppley 1972 (1/s)
     
-    !dy(0) = b1*c(1)*c(5)+b2*c(1)-a1*c(0)-a2*c(0)*c(6)
-    dy(0)=0
-    dy(1)=0
-    dy(2)=0
-    dy(3)=0
-    dy(4)=0
-    !dy(1) = a1*c(0)+a2*c(0)*c(6)-b1*c(1)*c(5)-b2*c(1) &
-    !     +a3*c(2)*c(5)-b3*c(1)-a4*c(1)*c(6)+b4*c(2) &
-    !     +a7*c(2)*c(3)-b7*c(4)*c(1)
+   dy(0) = b1*c(1)*c(5)+b2*c(1)-a1*c(0)-a2*c(0)*c(6)
+   
+   dy(1) = a1*c(0)+a2*c(0)*c(6)-b1*c(1)*c(5)-b2*c(1) &
+       +a3*c(2)*c(5)-b3*c(1)-a4*c(1)*c(6)+b4*c(2) &
+       +a7*c(2)*c(3)-b7*c(4)*c(1)
 
-    !dy(2) = -a3*c(2)*c(5)+ b3*c(1)+a4*c(1)*c(6)-b4*c(2) &
-    !     -a7*c(2)*c(3)+b7*c(4)*c(1)
+   dy(2) = -a3*c(2)*c(5)+ b3*c(1)+a4*c(1)*c(6)-b4*c(2) &
+       -a7*c(2)*c(3)+b7*c(4)*c(1)
 
-    !dy(3) = -a6*c(3)*c(6)+ b6*c(4)-a7*c(2)*c(3)+b7*c(4)*c(1)
+   dy(3) = -a6*c(3)*c(6)+ b6*c(4)-a7*c(2)*c(3)+b7*c(4)*c(1)
 
-    !dy(4) = a6*c(3)*c(6)- b6*c(4)+a7*c(2)*c(3)-b7*c(4)*c(1)
+   dy(4) = a6*c(3)*c(6)- b6*c(4)+a7*c(2)*c(3)-b7*c(4)*c(1)
 
-    dy(5) = 0
+   dy(5) = 0
 
-    !dy(6) = b2*c(1)-a2*c(0)*c(6)-a4*c(1)*c(6)+b4*c(2)+a5 &
-      !   -b5*c(5)*c(6)-a6*c(3)*c(6)+b6*c(4)
-    dy(6)=0
+   dy(6) = b2*c(1)-a2*c(0)*c(6)-a4*c(1)*c(6)+b4*c(2)+a5 &
+      -b5*c(5)*c(6)-a6*c(3)*c(6)+b6*c(4)
 
-    dy(7) = vp * (c(9) / (kn + c(9))) * function_light * c(7) - &
-      intensity * (1.0 - exp(-lambda * c(7))) * c(8) - death_rate_phyto &
-      * c(7)- r_npzd * c(7)
-
-    dy(8) = beta * intensity * (1.0 - exp(-lambda * c(7))) * c(8) - death_rate_zoo * c(8)
-
-    dy(9) = -vp * (c(9) / (kn + c(9))) * function_light * c(7) + alpha * &
-      intensity * (1.0 - exp(-lambda * c(7))) * c(8) + death_rate_phyto * c(7) + &
-      death_rate_zoo * c(8)+ phi*c(10)
-
-    dy(10) = r_npzd * c(7) + (1 - alpha - beta) * intensity * (1.0 - exp(-lambda * c(7))) * c(8) &
-      - phi * c(10)
 
     do i = 0,nscl-2
        dydt(i) = dy(i)
@@ -574,4 +482,4 @@ contains
 
   end function dydt
 
-end module reaction
+end module cc

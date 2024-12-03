@@ -16,7 +16,6 @@ MODULE pars
   INTEGER, PARAMETER :: iti=0, itmax=80000, imean=1, ihst=01, itape=500,        &
   itstr=1, it_his=120000, i_viz=120000
 
-  INTEGER, PARAMETER :: nscl = 12, nvar = (4+nscl) !number of scalars and vars
   INTEGER, PARAMETER :: nxg1  = 32, nyg1  = 32, nzg1  = 32 !size of problem
   INTEGER, PARAMETER :: maxnx = 256, maxny = 256, maxnz = 256 !max size
   INTEGER, PARAMETER :: maxnz1 = maxnz + 1, maxnz2 = maxnz + 2,             &
@@ -130,7 +129,8 @@ MODULE pars
   CHARACTER*80 path_viz_xy, path_viz_xz, path_viz_yz, path_stuf
 !----------------------------------------------------------------------
   INTEGER ::                                                                &
-          myid, numprocs, i_root, ziloc, myid_newvis, ncpu_s, ncpu_z, maxp
+          myid, numprocs, i_root, ziloc, myid_newvis, ncpu_s, ncpu_z, maxp, &
+          nscl, nvar
   INTEGER, ALLOCATABLE, DIMENSION(:) ::                                     &
           ix_s, ix_e, jx_s, jx_e, kx_s, kx_e, mx_s, mx_e, iy_s, iy_e, jy_s, &
           jy_e, is_s, is_e, iz_s, iz_e
